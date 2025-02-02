@@ -11,10 +11,10 @@ namespace BookStoreApi.Controllers;
 [Route("api/[controller]")]
 public class BooksController : ControllerBase
 {
-    private readonly BooksService _booksService;
+    private readonly IBookService _booksService;
     private readonly ILogger<BooksController> _logger;
 
-    public BooksController(BooksService booksService, ILogger<BooksController> logger)
+    public BooksController(IBookService booksService, ILogger<BooksController> logger)
     {
         _booksService = booksService;
         _logger = logger;
@@ -25,7 +25,7 @@ public class BooksController : ControllerBase
     {
         try
         {
-            var books = await _booksService.GetAsync();
+            var books = await _booksService.GetAllAsync();
             return Ok(books);
         }
         catch (Exception ex)
@@ -36,121 +36,121 @@ public class BooksController : ControllerBase
     }
 
     [HttpGet("{id}")]
-public async Task<ActionResult<Book>> Get(string id)
-{
-    try
+    public async Task<ActionResult<Book>> Get(string id)
     {
-        // Primero, verificamos si el libro existe en la base de datos
-        bool exists = await _booksService.ExistsAsync(id);
-        
-        if (!exists)
+        try
         {
-            return NotFound(new ErrorResponse { Message = $"Este libro no existe" });
+            // Primero, verificamos si el libro existe en la base de datos
+            bool exists = await _booksService.ExistsAsync(id);
+
+            if (!exists)
+            {
+                return NotFound(new ErrorResponse { Message = $"Este libro no existe" });
+            }
+
+            var book = await _booksService.GetByIdAsync(id);
+
+            return Ok(book);
         }
-
-        var book = await _booksService.GetAsync(id);
-
-        return Ok(book);
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, $"Error al obtener libro con id: {id}");
-        return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al obtener el libro." });
-    }
-}
-  [HttpPost]
-public async Task<ActionResult<Book>> Post([FromBody]Book newBook)
-{
-    try
-    {
-        // Validar el modelo
-        if (!ModelState.IsValid)
+        catch (Exception ex)
         {
-            var validationErrors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
-            Console.WriteLine(validationErrors);
-            return BadRequest(new ErrorResponse { Message = "Error de validación del modelo"});
+            _logger.LogError(ex, $"Error al obtener libro con id: {id}");
+            return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al obtener el libro." });
         }
-
-        // Crear el nuevo libro
-        await _booksService.CreateAsync(newBook);
-
-        // Retornar la respuesta de creación exitosa
-        return CreatedAtAction(nameof(Get), new { id = newBook.Id }, new SuccessResponse { Message = $"Libro creado satisfactoriamente" });
     }
-    catch (Exception ex)
+    [HttpPost]
+    public async Task<ActionResult<Book>> Post([FromBody] Book newBook)
     {
-        _logger.LogError(ex, "Error al crear un nuevo libro");
-        return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al crear el libro: {ex.Message}" });
+        try
+        {
+            // Validar el modelo
+            if (!ModelState.IsValid)
+            {
+                var validationErrors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
+                Console.WriteLine(validationErrors);
+                return BadRequest(new ErrorResponse { Message = "Error de validación del modelo" });
+            }
+
+            // Crear el nuevo libro
+            await _booksService.CreateAsync(newBook);
+
+            // Retornar la respuesta de creación exitosa
+            return CreatedAtAction(nameof(Get), new { id = newBook.Id }, new SuccessResponse { Message = $"Libro creado satisfactoriamente" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al crear un nuevo libro");
+            return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al crear el libro: {ex.Message}" });
+        }
     }
-}
 
 
     [HttpPut("{id}")]
-public async Task<IActionResult> Put(string id, [FromBody]Book updatedBook)
-{
-    try
+    public async Task<IActionResult> Put(string id, [FromBody] Book updatedBook)
     {
-        // Verificar si el libro existe antes de actualizar
-        bool exists = await _booksService.ExistsAsync(id);
-        
-        if (!exists)
+        try
         {
-            return NotFound(new ErrorResponse { Message = $"No se encontró un libro " });
-        }
+            // Verificar si el libro existe antes de actualizar
+            bool exists = await _booksService.ExistsAsync(id);
 
-        // Actualizar el libro
-        var book = await _booksService.GetAsync(id);
-        if (book == null)
+            if (!exists)
+            {
+                return NotFound(new ErrorResponse { Message = $"No se encontró un libro " });
+            }
+
+            // Actualizar el libro
+            var book = await _booksService.GetByIdAsync(id);
+            if (book == null)
+            {
+                // Esto debería ser imposible si ExistsAsync devolvió true,
+                // pero lo dejamos aquí por precaución
+                return NotFound(new ErrorResponse { Message = $"No se encontró un libro" });
+            }
+
+            updatedBook.Id = book.Id; // Asegurarse de que el Id no cambie
+            await _booksService.UpdateAsync(id, updatedBook);
+
+            return Ok(new SuccessResponse { Message = $"Libro  actualizado exitosamente" });
+        }
+        catch (Exception ex)
         {
-            // Esto debería ser imposible si ExistsAsync devolvió true,
-            // pero lo dejamos aquí por precaución
-            return NotFound(new ErrorResponse { Message = $"No se encontró un libro" });
+            _logger.LogError(ex, $"Error al actualizar libro ");
+            return BadRequest(new ErrorResponse { Message = $"Ha ocurrido un error al actualizar el libro: {ex.Message}" });
         }
-
-        updatedBook.Id = book.Id; // Asegurarse de que el Id no cambie
-        await _booksService.UpdateAsync(id, updatedBook);
-        
-        return Ok(new SuccessResponse { Message = $"Libro  actualizado exitosamente" });
     }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, $"Error al actualizar libro ");
-        return BadRequest(new ErrorResponse { Message = $"Ha ocurrido un error al actualizar el libro: {ex.Message}" });
-    }
-}
 
     [HttpDelete("{id}")]
-public async Task<IActionResult> Delete(string id)
-{
-    try
+    public async Task<IActionResult> Delete(string id)
     {
-        // Verificar si el libro existe antes de eliminar
-        bool exists = await _booksService.ExistsAsync(id);
-        
-        if (!exists)
+        try
         {
-            return NotFound(new ErrorResponse { Message = $"No se encontró un libro" });
-        }
+            // Verificar si el libro existe antes de eliminar
+            bool exists = await _booksService.ExistsAsync(id);
 
-        // Eliminar el libro
-        var book = await _booksService.GetAsync(id);
-        if (book == null)
+            if (!exists)
+            {
+                return NotFound(new ErrorResponse { Message = $"No se encontró un libro" });
+            }
+
+            // Eliminar el libro
+            var book = await _booksService.GetByIdAsync(id);
+            if (book == null)
+            {
+                // Esto debería ser imposible si ExistsAsync devolvió true,
+                // pero lo dejamos aquí por precaución
+                return NotFound(new ErrorResponse { Message = $"No se encontró un libro " });
+            }
+
+            await _booksService.RemoveAsync(id);
+
+            return Ok(new SuccessResponse { Message = $"Libro  eliminado exitosamente" });
+        }
+        catch (Exception ex)
         {
-            // Esto debería ser imposible si ExistsAsync devolvió true,
-            // pero lo dejamos aquí por precaución
-            return NotFound(new ErrorResponse { Message = $"No se encontró un libro " });
+            _logger.LogError(ex, $"Error al eliminar libro");
+            return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al eliminar ." });
         }
-
-        await _booksService.RemoveAsync(id);
-        
-        return Ok(new SuccessResponse { Message = $"Libro  eliminado exitosamente" });
     }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, $"Error al eliminar libro");
-        return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al eliminar ." });
-    }
-}
 }
 
 public class ErrorResponse

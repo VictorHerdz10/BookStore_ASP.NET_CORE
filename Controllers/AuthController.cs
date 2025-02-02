@@ -12,21 +12,14 @@ namespace BookStoreApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class AuthController(
+    IUserService usersService,
+    IOptions<JwtSettings> jwtSettings,
+    ILogger<AuthController> logger) : ControllerBase
 {
-    private readonly UsersService _usersService;
-    private readonly JwtSettings _jwtSettings;
-    private readonly ILogger<AuthController> _logger;
-
-    public AuthController(
-        UsersService usersService,
-        IOptions<JwtSettings> jwtSettings,
-        ILogger<AuthController> logger)
-    {
-        _usersService = usersService;
-        _jwtSettings = jwtSettings.Value;
-        _logger = logger;
-    }
+    private readonly IUserService _usersService = usersService;
+    private readonly JwtSettings _jwtSettings = jwtSettings.Value;
+    private readonly ILogger<AuthController> _logger = logger;
 
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
