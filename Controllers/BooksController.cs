@@ -1,32 +1,37 @@
 using BookStoreApi.Models;
 using BookStoreApi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
+using BookStoreApi.DTOs.Books; // Asegúrate de que esta línea esté presente
 
 namespace BookStoreApi.Controllers;
 
 [Authorize]
 [ApiController]
 [Route("api/[controller]")]
-public class BooksController : ControllerBase
+public class BooksController(IBookService booksService, ILogger<BooksController> logger) : ControllerBase
 {
-    private readonly IBookService _booksService;
-    private readonly ILogger<BooksController> _logger;
-
-    public BooksController(IBookService booksService, ILogger<BooksController> logger)
-    {
-        _booksService = booksService;
-        _logger = logger;
-    }
+    private readonly IBookService _booksService = booksService;
+    private readonly ILogger<BooksController> _logger = logger;
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Book>>> Get()
+    public async Task<ActionResult<IEnumerable<BookResponseDto>>> Get()
     {
         try
         {
             var books = await _booksService.GetAllAsync();
-            return Ok(books);
+
+            // Convertir cada Book a BookResponseDto
+            var response = books.Select(book => new BookResponseDto
+            {
+                Id = book.Id,
+                BookName = book.BookName,
+                Price = book.Price,
+                Category = book.Category,
+                Author = book.Author
+            });
+
+            return Ok(response);
         }
         catch (Exception ex)
         {
@@ -36,11 +41,11 @@ public class BooksController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<Book>> Get(string id)
+    public async Task<ActionResult<BookResponseDto>> Get(string id)
     {
         try
         {
-            // Primero, verificamos si el libro existe en la base de datos
+            // Verificar si el libro existe
             bool exists = await _booksService.ExistsAsync(id);
 
             if (!exists)
@@ -49,8 +54,19 @@ public class BooksController : ControllerBase
             }
 
             var book = await _booksService.GetByIdAsync(id);
-
-            return Ok(book);
+       if(book==null){
+            return NotFound(new ErrorResponse { Message = $"Este libro no existe" });
+         }
+       // Convertir Book a BookResponseDto
+            var response = new BookResponseDto
+            {
+                Id = book.Id,
+                BookName = book.BookName,
+                Price = book.Price,
+                Category = book.Category,
+                Author = book.Author
+            };
+            return Ok(response);
         }
         catch (Exception ex)
         {
@@ -58,8 +74,9 @@ public class BooksController : ControllerBase
             return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al obtener el libro." });
         }
     }
+
     [HttpPost]
-    public async Task<ActionResult<Book>> Post([FromBody] Book newBook)
+    public async Task<ActionResult<BookResponseDto>> Post([FromBody] CreateBookDto createBookDto)
     {
         try
         {
@@ -67,15 +84,33 @@ public class BooksController : ControllerBase
             if (!ModelState.IsValid)
             {
                 var validationErrors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
-                Console.WriteLine(validationErrors);
-                return BadRequest(new ErrorResponse { Message = "Error de validación del modelo" });
+                return BadRequest(new ErrorResponse { Message = "Error de validación del modelo", Errors = validationErrors });
             }
+
+            // Convertir el DTO a un objeto Book
+            var newBook = new Book
+            {
+                BookName = createBookDto.BookName,
+                Price = createBookDto.Price,
+                Category = createBookDto.Category,
+                Author = createBookDto.Author
+            };
 
             // Crear el nuevo libro
             await _booksService.CreateAsync(newBook);
 
+            // Convertir Book a BookResponseDto
+            var response = new BookResponseDto
+            {
+                Id = newBook.Id,
+                BookName = newBook.BookName,
+                Price = newBook.Price,
+                Category = newBook.Category,
+                Author = newBook.Author
+            };
+
             // Retornar la respuesta de creación exitosa
-            return CreatedAtAction(nameof(Get), new { id = newBook.Id }, new SuccessResponse { Message = $"Libro creado satisfactoriamente" });
+            return CreatedAtAction(nameof(Get), new { id = newBook.Id }, response);
         }
         catch (Exception ex)
         {
@@ -84,37 +119,62 @@ public class BooksController : ControllerBase
         }
     }
 
-
     [HttpPut("{id}")]
-    public async Task<IActionResult> Put(string id, [FromBody] Book updatedBook)
+    public async Task<ActionResult<BookResponseDto>> Put(string id, [FromBody] UpdateBookDto updateBookDto)
     {
         try
         {
-            // Verificar si el libro existe antes de actualizar
+            // Verificar si el libro existe
             bool exists = await _booksService.ExistsAsync(id);
 
             if (!exists)
             {
-                return NotFound(new ErrorResponse { Message = $"No se encontró un libro " });
-            }
-
-            // Actualizar el libro
-            var book = await _booksService.GetByIdAsync(id);
-            if (book == null)
-            {
-                // Esto debería ser imposible si ExistsAsync devolvió true,
-                // pero lo dejamos aquí por precaución
                 return NotFound(new ErrorResponse { Message = $"No se encontró un libro" });
             }
 
-            updatedBook.Id = book.Id; // Asegurarse de que el Id no cambie
-            await _booksService.UpdateAsync(id, updatedBook);
+            // Obtener el libro existente
+            var book = await _booksService.GetByIdAsync(id);
+            if (book == null)
+            {
+                return NotFound(new ErrorResponse { Message = $"No se encontró un libro" });
+            }
 
-            return Ok(new SuccessResponse { Message = $"Libro  actualizado exitosamente" });
+            // Actualizar solo los campos proporcionados en el DTO
+            if (updateBookDto.BookName != null)
+            {
+                book.BookName = updateBookDto.BookName;
+            }
+            if (updateBookDto.Price.HasValue)
+            {
+                book.Price = updateBookDto.Price.Value;
+            }
+            if (updateBookDto.Category != null)
+            {
+                book.Category = updateBookDto.Category;
+            }
+            if (updateBookDto.Author != null)
+            {
+                book.Author = updateBookDto.Author;
+            }
+
+            // Guardar los cambios
+            await _booksService.UpdateAsync(id, book);
+
+            // Convertir Book a BookResponseDto
+            var response = new BookResponseDto
+            {
+                Id = book.Id,
+                BookName = book.BookName,
+                Price = book.Price,
+                Category = book.Category,
+                Author = book.Author
+            };
+
+            return Ok(response);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error al actualizar libro ");
+            _logger.LogError(ex, $"Error al actualizar libro");
             return BadRequest(new ErrorResponse { Message = $"Ha ocurrido un error al actualizar el libro: {ex.Message}" });
         }
     }
@@ -124,7 +184,7 @@ public class BooksController : ControllerBase
     {
         try
         {
-            // Verificar si el libro existe antes de eliminar
+            // Verificar si el libro existe
             bool exists = await _booksService.ExistsAsync(id);
 
             if (!exists)
@@ -133,22 +193,14 @@ public class BooksController : ControllerBase
             }
 
             // Eliminar el libro
-            var book = await _booksService.GetByIdAsync(id);
-            if (book == null)
-            {
-                // Esto debería ser imposible si ExistsAsync devolvió true,
-                // pero lo dejamos aquí por precaución
-                return NotFound(new ErrorResponse { Message = $"No se encontró un libro " });
-            }
-
             await _booksService.RemoveAsync(id);
 
-            return Ok(new SuccessResponse { Message = $"Libro  eliminado exitosamente" });
+            return Ok(new SuccessResponse { Message = $"Libro eliminado exitosamente" });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"Error al eliminar libro");
-            return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al eliminar ." });
+            return StatusCode(500, new ErrorResponse { Message = $"Ha ocurrido un error al eliminar el libro." });
         }
     }
 }
@@ -156,6 +208,7 @@ public class BooksController : ControllerBase
 public class ErrorResponse
 {
     public string? Message { get; set; }
+    public IEnumerable<string>? Errors { get; set; } // Para incluir errores de validación
 }
 
 public class SuccessResponse

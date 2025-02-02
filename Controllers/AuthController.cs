@@ -1,3 +1,4 @@
+using BookStoreApi.DTOs.Users;
 using BookStoreApi.Models;
 using BookStoreApi.Services;
 using BookStoreApi.Settings;
@@ -10,6 +11,7 @@ using System.Text;
 
 namespace BookStoreApi.Controllers;
 
+
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController(
@@ -20,9 +22,10 @@ public class AuthController(
     private readonly IUserService _usersService = usersService;
     private readonly JwtSettings _jwtSettings = jwtSettings.Value;
     private readonly ILogger<AuthController> _logger = logger;
+    
 
     [HttpPost("register")]
-    public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
+    public async Task<ActionResult<AuthResponse>> Register(RegisterDto request)
     {
         try
         {
@@ -60,7 +63,7 @@ public class AuthController(
     }
 
     [HttpPost("login")]
-    public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
+    public async Task<ActionResult<AuthResponse>> Login(LoginDto request)
     {
         try
         {
