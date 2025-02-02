@@ -2,23 +2,23 @@ using BookStoreApi.Models;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using BCrypt.Net;
+using BookStoreApi.Context;
 
 namespace BookStoreApi.Services;
-
-public class UsersService
-{
-    private readonly IMongoCollection<User> _usersCollection;
-
-    public UsersService(IOptions<BookStoreDatabaseSettings> bookStoreDatabaseSettings)
+ public interface IUserService
     {
-        var mongoClient = new MongoClient(
-            bookStoreDatabaseSettings.Value.ConnectionString);
+        Task<User?> GetByEmailAsync(string email);
+        Task<User?> GetByIdAsync(string id);
+        Task<User> CreateAsync(User newUser);
+        Task UpdateAsync(string id, User updatedUser);
+        Task RemoveAsync(string id);
+        Task CreateIndexes();
+        bool ValidatePassword(User user, string password);
+}
 
-        var mongoDatabase = mongoClient.GetDatabase(
-            bookStoreDatabaseSettings.Value.DatabaseName);
-
-        _usersCollection = mongoDatabase.GetCollection<User>("Users");
-    }
+public class UsersService(MongoDbContext context) : IUserService
+{
+    private readonly IMongoCollection<User> _usersCollection = context.Usuarios;
 
     // Crear índice único para email
     public async Task CreateIndexes()
