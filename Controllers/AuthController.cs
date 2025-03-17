@@ -13,7 +13,7 @@ namespace BookStoreApi.Controllers;
 
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("[controller]")]
 public class AuthController(
     IUserService usersService,
     IOptions<JwtSettings> jwtSettings,

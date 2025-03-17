@@ -8,7 +8,7 @@ namespace BookStoreApi.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/[controller]")]
+[Route("[controller]")]
 public class BooksController(IBookService booksService, ILogger<BooksController> logger) : ControllerBase
 {
     private readonly IBookService _booksService = booksService;
